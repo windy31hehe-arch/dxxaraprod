@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MathBro AI Pro</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <style>
+        :root {
+            --bg: #0b0f19;
+            --card: #1e293b;
+            --text: #f8fafc;
+            --accent: #6366f1;
+        }
+        * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
+        body {
+            background: var(--bg); color: var(--text);
+            margin: 0; padding: 0;
+            padding-top: 110px; /* Место под шапку */
+            padding-bottom: 135px; /* Место под фиксированное поле ввода */
+        }
+
+        /* Фиксированная верхняя шапка */
+        .top-fixed {
+            position: fixed; top: 0; left: 0; right: 0;
+            background: rgba(11, 15, 25, 0.95); backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255,255,255,0.08); z-index: 50;
+        }
+        .header { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; }
+        .title { font-size: 19px; font-weight: 800; background: linear-gradient(90deg, #818cf8, #c084fc); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .header-actions { display: flex; gap: 6px; }
+        .icon-btn { background: #1e293b; border: 1px solid rgba(255,255,255,0.12); color: var(--text); padding: 6px 10px; border-radius: 10px; font-size: 13px; cursor: pointer; }
+
+        /* Кнопки режимов */
+        .modes { display: flex; gap: 6px; padding: 0 14px 10px 14px; overflow-x: auto; scrollbar-width: none; }
+        .modes::-webkit-scrollbar { display: none; }
+        .mode-btn {
+            flex-shrink: 0; background: #1e293b; border: 1.5px solid rgba(255,255,255,0.08);
+            color: var(--text); padding: 7px 12px; border-radius: 16px; font-size: 13px; font-weight: 600;
+        }
+        .mode-btn.active { border-color: #818cf8; background: rgba(99, 102, 241, 0.25); }
+
+        /* История чата */
+        #chatContainer { padding: 12px 14px; display: flex; flex-direction: column; gap: 12px; }
+        .msg { padding: 13px 15px; border-radius: 16px; line-height: 1.5; font-size: 15px; word-wrap: break-word; overflow-x: auto; }
+        .msg.user { align-self: flex-end; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; max-width: 88%; border-bottom-right-radius: 4px; }
+        .msg.bot { align-self: flex-start; background: var(--card); border: 1px solid rgba(255,255,255,0.08); width: 100%; border-bottom-left-radius: 4px; }
+        .msg img { max-width: 160px; border-radius: 8px; display: block; margin-bottom: 6px; }
+
+        .katex-display { overflow-x: auto; overflow-y: hidden; padding: 4px 0; }
+
+        /* ЖЕЛЕЗНО ФИКСИРОВАННАЯ НИЖНЯЯ ПАНЕЛЬ ВВОДА */
+        .bottom-bar {
+            position: fixed; bottom: 0; left: 0; right: 0;
+            background: #111827; border-top: 1px solid rgba(255,255,255,0.12);
+            padding: 10px 12px 16px 12px; z-index: 50;
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.5);
+        }
+        #previewBox { display: none; align-items: center; gap: 10px; margin-bottom: 8px; background: #1e293b; padding: 6px 10px; border-radius: 10px; }
+        #preview { height: 40px; border-radius: 6px; }
+        .input-row { display: flex; gap: 8px; align-items: center; }
+        .photo-btn {
+            background: #1e293b; border: 1px solid rgba(255,255,255,0.15);
+            color: white; width: 46px; height: 46px; border-radius: 12px;
+            display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0;
+        }
+        textarea {
+            flex: 1; background: #1e293b; border: 1px solid rgba(255,255,255,0.2);
+            color: white; padding: 12px; border-radius: 12px; font-size: 15px;
+            resize: none; outline: none; height: 46px;
+        }
+        .send-btn {
+            background: linear-gradient(135deg, #6366f1, #a855f7); color: white; border: none;
+            padding: 0 16px; height: 46px; border-radius: 12px; font-size: 16px; font-weight: 700; flex-shrink: 0;
+        }
+        .send-btn:disabled { opacity: 0.4; }
+
+        /* Окно настроек */
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); padding: 16px; align-items: center; justify-content: center; z-index: 100; }
+        .modal-content { background: #1e293b; padding: 18px; border-radius: 16px; width: 100%; max-width: 360px; }
+        .input-group { margin-bottom: 10px; }
+        .input-group label { display: block; font-size: 12px; margin-bottom: 4px; opacity: 0.8; }
+        .input-group input { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: #0b0f19; color: white; }
+    </style>
+</head>
+<body>
+
+    <div class="top-fixed">
+        <div class="header">
+            <div class="title">✨ MathBro AI</div>
+            <div class="header-actions">
+                <button class="icon-btn" onclick="clearHistory()">🗑 Очистить</button>
+                <button class="icon-btn" onclick="toggleSettings()">⚙️ Ключ</button>
+            </div>
+        </div>
+        <div class="modes">
+            <button class="mode-btn active" onclick="setMode('bro', this)">😎 Бро</button>
+            <button class="mode-btn" onclick="setMode('step', this)">📐 По шагам</button>
+            <button class="mode-btn" onclick="setMode('roast', this)">🌶 Токсик</button>
+            <button class="mode-btn" onclick="setMode('check', this)">🔍 Найди ошибку</button>
+        </div>
+    </div>
+
+    <div id="chatContainer"></div>
+
+    <!-- Нижняя панель ввода (Всегда видна!) -->
+    <div class="bottom-bar">
+        <div id="previewBox">
+            <img id="preview" />
+            <span style="font-size: 13px; flex:1">Фото готово к отправке</span>
+            <button class="icon-btn" onclick="clearImage()">✖</button>
+        </div>
+        <div class="input-row">
+            <label class="photo-btn">
+                📷
+                <input type="file" id="imageInput" accept="image/*" style="display:none" onchange="previewImage(event)">
+            </label>
+            <textarea id="mathInput" placeholder="Введи задачу сюда..."></textarea>
+            <button class="send-btn" id="solveBtn" onclick="solveMath()">Решить</button>
+        </div>
+    </div>
+
+    <!-- Настройки -->
+    <div class="modal" id="settingsModal">
+        <div class="modal-content">
+            <h3 style="margin-top:0">⚙️ Настройки бота</h3>
+            <div class="input-group">
+                <label>Модель Gemini:</label>
+                <input type="text" id="geminiModel" value="gemini-3.8-flash">
+            </div>
+            <div class="input-group">
+                <label>Воркер Cloudflare:</label>
+                <input type="text" id="geminiHost" value="https://flat-hill-d446.stellarchikyt.workers.dev">
+            </div>
+            <div class="input-group">
+                <label>API Ключ (если еще не вписал в воркер):</label>
+                <input type="password" id="apiKey" placeholder="Оставь пустым, если ключ в воркере">
+            </div>
+            <button class="send-btn" style="width:100%" onclick="saveSettings()">Сохранить</button>
+        </div>
+    </div>
+
+<script>
+    const tg = window.Telegram.WebApp;
+    tg.expand();
+
+    const DEFAULT_PROXY = 'https://flat-hill-d446.stellarchikyt.workers.dev';
+    const DEFAULT_MODEL = 'gemini-3.8-flash';
+
+    let currentMode = 'bro';
+    let base64Image = null;
+    let chatHistory = JSON.parse(localStorage.getItem('math_chat_history') || '[]');
+
+    const mathRules = "ВАЖНО: Все математические формулы, дроби и корни пиши через LaTeX: используй $$...$$ для отдельных формул и $...$ внутри текста (например, $\\frac{a}{b}$, $\\sqrt{x}$).";
+
+    const prompts = {
+        bro: "Ты крутой друг-математик. Объясни решение максимально просто, на пальцах, но точно. " + mathRules,
+        step: "Ты топовый репетитор. Распиши решение задачи строго по шагам для контрольной на 5+. " + mathRules,
+        roast: "Ты саркастичный гений математики. Сначала смешно подколи пользователя, а затем дай идеальное решение. " + mathRules,
+        check: "Проверь решение пользователя. Найди строчку с ошибкой, объясни почему и покажи как правильно. " + mathRules
+    };
+
+    function playSuccessFeedback() {
+        try {
+            if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+            if (navigator.vibrate) navigator.vibrate([80, 50, 120]);
+        } catch (e) {}
+
+        try {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            const ctx = new AudioCtx();
+            [523.25, 659.25, 783.99, 1046.50].forEach((freq, idx) => {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.09);
+                gain.gain.setValueAtTime(0.001, ctx.currentTime + idx * 0.09);
+                gain.gain.exponentialRampToValueAtTime(0.12, ctx.currentTime + idx * 0.09 + 0.04);
+                gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 1.0);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start(ctx.currentTime + idx * 0.09);
+                osc.stop(ctx.currentTime + 1.0);
+            });
+        } catch (e) {}
+    }
+
+    function renderChat() {
+        const container = document.getElementById('chatContainer');
+        container.innerHTML = '';
+
+        if (chatHistory.length === 0) {
+            container.innerHTML = `
+                <div class="msg bot">
+                    👋 <b>Йоу! Я MathBro AI.</b><br>
+                    Напиши пример в поле внизу 👇 или нажми 📷 чтобы прикрепить фото задачи!
+                </div>`;
+            return;
+        }
+
+        chatHistory.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'msg ' + item.role;
+            if (item.role === 'user') {
+                div.innerHTML = (item.image ? `<img src="data:image/jpeg;base64,${item.image}" />` : '') + `<div>${item.text}</div>`;
+            } else {
+                div.innerHTML = marked.parse(item.text);
+                if (window.renderMathInElement) {
+                    renderMathInElement(div, {
+                        delimiters: [
+                            {left: '$$', right: '$$', display: true},
+                            {left: '$', right: '$', display: false}
+                        ],
+                        throwOnError: false
+                    });
+                }
+            }
+            container.appendChild(div);
+        });
+        window.scrollTo(0, document.body.scrollHeight);
+    }
+
+    function clearHistory() {
+        chatHistory = [];
+        localStorage.removeItem('math_chat_history');
+        renderChat();
+    }
+
+    function setMode(mode, btn) {
+        currentMode = mode;
+        document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+    }
+
+    function previewImage(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('preview').src = e.target.result;
+            document.getElementById('previewBox').style.display = 'flex';
+            base64Image = e.target.result.split(',')[1];
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function clearImage() {
+        base64Image = null;
+        document.getElementById('imageInput').value = '';
+        document.getElementById('previewBox').style.display = 'none';
+    }
+
+    function toggleSettings() {
+        const modal = document.getElementById('settingsModal');
+        modal.style.display = modal.style.display === 'flex' ? 'none' : 'flex';
+        document.getElementById('apiKey').value = localStorage.getItem('math_api_key') || '';
+        document.getElementById('geminiModel').value = localStorage.getItem('math_gemini_model') || DEFAULT_MODEL;
+        document.getElementById('geminiHost').value = localStorage.getItem('math_gemini_host') || DEFAULT_PROXY;
+    }
+
+    function saveSettings() {
+        localStorage.setItem('math_api_key', document.getElementById('apiKey').value.trim());
+        localStorage.setItem('math_gemini_model', document.getElementById('geminiModel').value.trim() || DEFAULT_MODEL);
+        localStorage.setItem('math_gemini_host', document.getElementById('geminiHost').value.trim().replace(/\/$/, '') || DEFAULT_PROXY);
+        document.getElementById('settingsModal').style.display = 'none';
+    }
+
+    // Умный запрос с авто-обходом блокировки workers.dev без VPN
+    async function smartFetch(targetUrl, bodyObj) {
+        try {
+            // Попытка 1: Напрямую к твоему воркеру
+            const res = await fetch(targetUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(bodyObj)
+            });
+            return await res.json();
+        } catch (err) {
+            // Попытка 2: Если провайдер блокирует workers.dev без VPN, пускаем через туннель
+            const bridgeUrl = 'https://corsproxy.io/?' + encodeURIComponent(targetUrl);
+            const res2 = await fetch(bridgeUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(bodyObj)
+            });
+            return await res2.json();
+        }
+    }
+
+    async function solveMath() {
+        const inputEl = document.getElementById('mathInput');
+        const text = inputEl.value.trim();
+        const btn = document.getElementById('solveBtn');
+
+        if (!text && !base64Image) {
+            alert('Напиши задачу в поле внизу или прикрепи фото!');
+            return;
+        }
+
+        const userText = text || '📷 Реши задачу на фото';
+        const attachedImg = base64Image;
+
+        chatHistory.push({ role: 'user', text: userText, image: attachedImg });
+        inputEl.value = '';
+        clearImage();
+        renderChat();
+
+        const container = document.getElementById('chatContainer');
+        const loadingDiv = document.createElement('div');
+        loadingDiv.className = 'msg bot';
+        loadingDiv.innerHTML = '⏳ <i>Решаю задачу...</i>';
+        container.appendChild(loadingDiv);
+        window.scrollTo(0, document.body.scrollHeight);
+
+        btn.disabled = true;
+
+        try {
+            const key = localStorage.getItem('math_api_key') || '';
+            const geminiModel = localStorage.getItem('math_gemini_model') || DEFAULT_MODEL;
+            const host = (localStorage.getItem('math_gemini_host') || DEFAULT_PROXY).replace(/\/$/, '');
+
+            const parts = [{ text: prompts[currentMode] + "\n\nЗадача: " + userText }];
+            if (attachedImg) {
+                parts.push({ inline_data: { mime_type: "image/jpeg", data: attachedImg } });
+            }
+
+            const keyParam = key ? `?key=${key}` : '';
+            const fullUrl = `${host}/v1beta/models/${geminiModel}:generateContent${keyParam}`;
+
+            const data = await smartFetch(fullUrl, { contents: [{ parts }] });
+            if (data.error) throw new Error(data.error.message);
+            const answer = data.candidates[0].content.parts[0].text;
+
+            chatHistory[chatHistory.length - 1].image = null;
+            chatHistory.push({ role: 'bot', text: answer });
+            localStorage.setItem('math_chat_history', JSON.stringify(chatHistory.slice(-15)));
+
+            renderChat();
+            playSuccessFeedback();
+        } catch (err) {
+            loadingDiv.innerHTML = '❌ <b>Ошибка:</b> ' + err.message;
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    renderChat();
+</script>
+</body>
+</html>
